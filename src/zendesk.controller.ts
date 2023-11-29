@@ -38,7 +38,7 @@ export class ZendeskController {
     @Post('ticketSender')
     async handleRequest(@Body() requestBody: any) {
         try {
-            const requiredFields = ['motivo', 'descripcion', 'product', 'user', 'email', 'phone', 'city'];
+            const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'city'];
 
             const hasAllRequiredFields = requiredFields.every(field => Object.keys(requestBody).includes(field));
 
@@ -47,17 +47,17 @@ export class ZendeskController {
                 return { error: 'Por favor, proporcione todos los campos requeridos.' };
             }
 
-            const { motivo, descripcion, product, user, email, phone, city } = requestBody;
+            const { motive, description, product, user, email, phone, city } = requestBody;
 
             const groupId = await this.getGroupId(product, city);
 
             const zendeskTicket = {
                 ticket: {
                     comment: {
-                        body: `${descripcion}\n\nUsuario: ${user}\nCorreo electrónico: ${email}\nTeléfono: ${phone}`,
+                        body: `${description}\n\nUsuario: ${user}\nCorreo electrónico: ${email}\nTeléfono: ${phone}`,
                     },
                     priority: 'urgent',
-                    subject: motivo,
+                    subject: motive,
                     group_id: groupId,
                 },
             };
@@ -71,7 +71,7 @@ export class ZendeskController {
             return {
                 status: 'Éxito',
                 message: 'Ticket creado exitosamente',
-                data: { motivo, descripcion, product, user, email, phone, city },
+                data: { motive, description, product, user, email, phone, city },
                 zendeskTicket: zendeskResponse.ticket,
             };
         } catch (error) {

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ZendeskController } from './zendesk.controller';
-import { createClient, ZendeskClientOptions } from 'node-zendesk';
+import { createClient } from 'node-zendesk';
 
 jest.mock('node-zendesk', () => ({
     createClient: jest.fn(),
@@ -23,7 +23,6 @@ describe('ZendeskController', () => {
     });
 
     it('should create a ticket', async () => {
-        // Mock de createClient
         const createClientMock = createClient as jest.Mock;
         createClientMock.mockImplementationOnce(() => ({
             tickets: {
@@ -33,35 +32,43 @@ describe('ZendeskController', () => {
             },
         }));
 
+        const getGroupIdSpy = jest.spyOn(controller, 'getGroupId');
+        getGroupIdSpy.mockResolvedValueOnce(1); 
+
         const requestBody = {
-            motivo: 'Test Motivo',
-            descripcion: 'Test Descripcion',
+            motive: 'Test Motivo',
+            description: 'Test Descripcion',
+            product: 'Test Product',
+            user: 'Test User',
+            email: 'test@example.com',
+            phone: '123456789',
+            city: 'Test City',
         };
 
         const result = await controller.handleRequest(requestBody);
 
-        // Asegurarse de que la respuesta es la esperada
         expect(result.status).toEqual('Éxito');
         expect(result.zendeskTicket.id).toEqual(123);
         expect(result.zendeskTicket.subject).toEqual('Test Subject');
 
-        // Asegurarse de que createClient se llamó con las credenciales correctas
         expect(createClientMock).toHaveBeenCalledWith({
             username: process.env.ZENDESK_USERNAME,
             token: process.env.ZENDESK_API_TOKEN,
             subdomain: process.env.ZENDESK_SUBDOMAIN,
         });
 
-        // Asegurarse de que tickets.create se llamó con la estructura correcta del ticket
         const createTicketMock = createClientMock().tickets.create as jest.Mock;
         expect(createTicketMock).toHaveBeenCalledWith({
             ticket: {
                 comment: {
-                    body: 'Test Descripcion',
+                    body: 'Test Descripcion\n\nUsuario: Test User\nCorreo electrónico: test@example.com\nTeléfono: 123456789',
                 },
                 priority: 'urgent',
                 subject: 'Test Motivo',
+                group_id: 1, 
             },
         });
+
+        expect(getGroupIdSpy).toHaveBeenCalledWith('Test Product', 'Test City');
     });
 });

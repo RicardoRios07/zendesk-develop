@@ -18,22 +18,28 @@ export class ZendeskController {
     }
 
     async getGroupId(product: string, city: string): Promise<number | undefined> {
-        const zendeskGroups = await this.zendeskClient.groups.list();
-        this.grupos = zendeskGroups.map(group => ({
-            id: group.id,
-            nombre: group.name,
-        }));
+        try {
+            const zendeskGroups = await this.zendeskClient.groups.list();
+            this.grupos = zendeskGroups.map(group => ({
+                id: group.id,
+                nombre: group.name,
+            }));
 
-        const productGroups = ['Buses', 'Delivery', 'Eventos', 'Karview', 'Kparking', 'Proyectos Especiales'];
-        if (productGroups.includes(product)) {
-            const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${product}`);
-            return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
-        } else {
+            const productGroups = ['Buses', 'Delivery', 'Eventos', 'Karview', 'Kparking', 'Proyectos Especiales'];
+            if (productGroups.includes(product)) {
+                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${product}`);
+                return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
+            } else {
 
-            const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${city}`);
-            return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
+                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${city}`);
+                return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
+            }
+        } catch (error) {
+            this.logger.error('Error al obtener grupos desde Zendesk', error);
+            throw error;
         }
     }
+
 
     @Post('ticketSender')
     async handleRequest(@Body() requestBody: any) {
@@ -49,6 +55,11 @@ export class ZendeskController {
 
             const { motive, description, product, user, email, phone, city } = requestBody;
 
+            if (!this.zendeskClient) {
+                this.logger.error('Error: Cliente Zendesk no inicializado correctamente');
+                return { status: 'Error', error: 'Error al procesar la solicitud' };
+            }
+    
             const groupId = await this.getGroupId(product, city);
 
             const zendeskTicket = {

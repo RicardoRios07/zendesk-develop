@@ -17,7 +17,7 @@ export class ZendeskController {
         });
     }
 
-    async getGroupId(product: string, city: string): Promise<number | undefined> {
+    async getGroupId(product: string, location: string): Promise<number | undefined> {
         try {
             const zendeskGroups = await this.zendeskClient.groups.list();
             this.grupos = zendeskGroups.map(group => ({
@@ -31,7 +31,7 @@ export class ZendeskController {
                 return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
             } else {
 
-                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${city}`);
+                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${location}`);
                 return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
             }
         } catch (error) {
@@ -44,7 +44,7 @@ export class ZendeskController {
     @Post('ticketSender')
     async handleRequest(@Body() requestBody: any) {
         try {
-            const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'city'];
+            const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'location'];
 
             const hasAllRequiredFields = requiredFields.every(field => Object.keys(requestBody).includes(field));
 
@@ -53,14 +53,14 @@ export class ZendeskController {
                 return { error: 'Por favor, proporcione todos los campos requeridos.' };
             }
 
-            const { motive, description, product, user, email, phone, city } = requestBody;
+            const { motive, description, product, user, email, phone, location } = requestBody;
 
             if (!this.zendeskClient) {
                 this.logger.error('Error: Cliente Zendesk no inicializado correctamente');
                 return { status: 'Error', error: 'Error al procesar la solicitud' };
             }
     
-            const groupId = await this.getGroupId(product, city);
+            const groupId = await this.getGroupId(product, location);
 
             const zendeskTicket = {
                 ticket: {
@@ -82,7 +82,7 @@ export class ZendeskController {
             return {
                 status: 'Éxito',
                 message: 'Ticket creado exitosamente',
-                data: { motive, description, product, user, email, phone, city },
+                data: { motive, description, product, user, email, phone, location },
                 zendeskTicket: zendeskResponse.ticket,
             };
         } catch (error) {

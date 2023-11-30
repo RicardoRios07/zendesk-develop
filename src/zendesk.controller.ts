@@ -1,13 +1,31 @@
-import { Controller, Post, Body, Logger, Get } from '@nestjs/common';
+import { Controller, Post, Get, Body, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { createClient } from 'node-zendesk';
+
+interface Grupo {
+    nombre: string;
+    id: number;
+}
 
 @Controller('zendesk')
 export class ZendeskController {
     private readonly logger = new Logger(ZendeskController.name);
-
     private zendeskClient: any;
-
-    private grupos: { nombre: string; id: number }[] = [];
+    private grupos: Grupo[] = [];
+    private productGroups: { [key: string]: string[] } = {
+        'Loja': ['KTaxi', 'Eventos', 'Delivery', 'Karview', 'Buses', 'Proyectos Especiales'],
+        'Ambato': ['KTaxi', 'Parking'],
+        'Cuenca': ['KTaxi'],
+        'Ibarra': ['KTaxi', 'Karview'],
+        'Tulcán': ['Karview'],
+        'Santo Domingo': ['KTaxi'],
+        'Quito': ['KTaxi'],
+        'Riobamba': ['KTaxi'],
+        'Perú': ['KTaxi'],
+        'Colombia': ['KTaxi', 'Buses'],
+        'Chile': ['KTaxi'],
+        'México': ['Buses'],
+        'Bolivia': ['KTaxi'],
+    };
 
     constructor() {
         this.zendeskClient = createClient({
@@ -17,50 +35,75 @@ export class ZendeskController {
         });
     }
 
-    async getGroupId(product: string, location: string): Promise<number | undefined> {
+    private async getGroupId(product: string, location: string): Promise<number> {
         try {
             const zendeskGroups = await this.zendeskClient.groups.list();
-            this.grupos = zendeskGroups.map(group => ({
-                id: group.id,
-                nombre: group.name,
-            }));
+            this.grupos = zendeskGroups.map(group => ({ id: group.id, nombre: group.name }));
 
-            const productGroups = ['Buses', 'Delivery', 'Eventos', 'Karview', 'Kparking', 'Proyectos Especiales'];
-            if (productGroups.includes(product)) {
-                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${product}`);
-                return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
-            } else {
+            this.logger.log('Location:', location);
+            this.logger.log('Product:', product);
+            this.logger.log('Product Groups:', this.productGroups);
 
-                const grupo = this.grupos.find(grupo => grupo.nombre === `Soporte ${location}`);
-                return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
+            const isLocationValid = this.productGroups.hasOwnProperty(location);
+            const isProductAvailable = this.isProductAvailableInLocation(product, location);
+
+            if (!isLocationValid || !isProductAvailable) {
+                throw new Error('Producto no válido para la ubicación enviada');
             }
+
+            const groupName = this.determineGroupName(product, location);
+            const grupo = this.grupos.find(grupo => grupo.nombre === groupName);
+
+            this.logger.log('Grupo encontrado:', groupName);
+            this.logger.log('Grupo seleccionado:', grupo);
+
+            return grupo ? grupo.id : this.getGroupIdForDefaultGroup('Soporte Loja');
         } catch (error) {
             this.logger.error('Error al obtener grupos desde Zendesk', error);
             throw error;
         }
     }
 
+    private determineGroupName(product: string, location: string): string {
+        if (location === 'Loja') {
+            return `Soporte ${product}`;
+        } else {
+            return `Soporte ${location}`;
+        }
+    }
 
     @Post('ticketSender')
     async handleRequest(@Body() requestBody: any) {
         try {
             const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'location'];
 
-            const hasAllRequiredFields = requiredFields.every(field => Object.keys(requestBody).includes(field));
-
-            if (!hasAllRequiredFields) {
-                this.logger.error('Campos incorrectos en la solicitud');
-                return { error: 'Por favor, proporcione todos los campos requeridos.' };
+            if (!requiredFields.every(field => Object.keys(requestBody).includes(field))) {
+                throw new HttpException('Por favor, proporcione todos los campos requeridos.', HttpStatus.BAD_REQUEST);
             }
 
             const { motive, description, product, user, email, phone, location } = requestBody;
 
-            if (!this.zendeskClient) {
-                this.logger.error('Error: Cliente Zendesk no inicializado correctamente');
-                return { status: 'Error', error: 'Error al procesar la solicitud' };
+            this.logger.log('Product Groups:', this.productGroups);
+            this.logger.log('Checking Product Availability for:', location, product);
+            this.logger.log('Available Products for Location:', this.productGroups[location]);
+
+            const isProductAvailable = this.isProductAvailableInLocation(product, location);
+
+            this.logger.log('Is Product Available:', isProductAvailable);
+
+            if (!isProductAvailable) {
+                throw new HttpException('Producto no válido para la ubicación enviada.', HttpStatus.BAD_REQUEST);
             }
-    
+
+            if (!this.zendeskClient) {
+                throw new HttpException('Error: Cliente Zendesk no inicializado correctamente', HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
             const groupId = await this.getGroupId(product, location);
+
+            if (!groupId) {
+                throw new HttpException('No se pudo determinar el grupo para el producto y la ubicación proporcionados.', HttpStatus.INTERNAL_SERVER_ERROR);
+            }
 
             const zendeskTicket = {
                 ticket: {
@@ -72,8 +115,6 @@ export class ZendeskController {
                     group_id: groupId,
                 },
             };
-
-            // this.logger.log('ZENDESK TICKET', zendeskTicket);
 
             const zendeskResponse = await this.zendeskClient.tickets.create(zendeskTicket);
 
@@ -89,11 +130,6 @@ export class ZendeskController {
             this.logger.error('Error al procesar la solicitud', error);
             throw error;
         }
-    }
-
-    private getGroupIdForDefaultGroup(defaultGroupName: string): number | undefined {
-        const defaultGroup = this.grupos.find(grupo => grupo.nombre === defaultGroupName);
-        return defaultGroup?.id;
     }
 
     @Get('grupos')
@@ -113,5 +149,24 @@ export class ZendeskController {
             this.logger.error('Error al obtener la lista de grupos desde Zendesk', error);
             throw error;
         }
+    }
+
+
+
+    private getGroupIdForDefaultGroup(defaultGroupName: string): number | undefined {
+        const defaultGroup = this.grupos.find(grupo => grupo.nombre === defaultGroupName);
+        return defaultGroup?.id;
+    }
+
+    private isProductAvailableInLocation(product: string, location: string): boolean {
+        const availableProducts = this.productGroups[location];
+
+        if (!availableProducts) {
+            return false;
+        }
+
+        this.logger.log('Available Products for Location:', availableProducts);
+
+        return availableProducts.includes(product);
     }
 }

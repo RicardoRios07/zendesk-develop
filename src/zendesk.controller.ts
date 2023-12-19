@@ -76,8 +76,10 @@ export class ZendeskController {
     async handleRequest(@Body() requestBody: any) {
         try {
             const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'groupId'];
+            console.log("🚀 ~ file: zendesk.controller.ts:79 ~ ZendeskController ~ handleRequest ~ requiredFields:", requiredFields)
 
             if (!requiredFields.every(field => Object.keys(requestBody).includes(field))) {
+                console.log("🚀 ~ file: zendesk.controller.ts:82 ~ ZendeskController ~ handleRequest ~ requestBody:", requestBody)
                 throw new HttpException('Por favor, proporcione todos los campos requeridos.', HttpStatus.BAD_REQUEST);
             }
 
@@ -106,7 +108,7 @@ export class ZendeskController {
             return {
                 status: 'Éxito',
                 message: 'Ticket creado exitosamente',
-                data: { motive, description, groupId, user, email, phone, location },
+                data: { motive, description, groupId, user, email, phone },
                 zendeskTicket: zendeskResponse.ticket,
             };
         } catch (error) {

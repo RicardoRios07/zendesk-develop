@@ -75,36 +75,19 @@ export class ZendeskController {
     @Post('ticketSender')
     async handleRequest(@Body() requestBody: any) {
         try {
-            const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'location'];
+            const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'groupId'];
 
             if (!requiredFields.every(field => Object.keys(requestBody).includes(field))) {
                 throw new HttpException('Por favor, proporcione todos los campos requeridos.', HttpStatus.BAD_REQUEST);
             }
 
-            const { motive, description, product, user, email, phone, location } = requestBody;
+            const { motive, description, user, email, phone, groupId } = requestBody;
 
-            this.logger.log('Product Groups:', this.productGroups);
-            this.logger.log('Checking Product Availability for:', location, product);
-            this.logger.log('Available Products for Location:', this.productGroups[location]);
-
-            const isProductAvailable = this.isProductAvailableInLocation(product, location);
-
-            this.logger.log('Is Product Available:', isProductAvailable);
-
-            if (!isProductAvailable) {
-                throw new HttpException('Producto no válido para la ubicación enviada.', HttpStatus.BAD_REQUEST);
-            }
 
             if (!this.zendeskClient) {
                 throw new HttpException('Error: Cliente Zendesk no inicializado correctamente', HttpStatus.INTERNAL_SERVER_ERROR);
             }
-
-            const groupId = await this.getGroupId(product, location);
-
-            if (!groupId) {
-                throw new HttpException('No se pudo determinar el grupo para el producto y la ubicación proporcionados.', HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-
+     
             const zendeskTicket = {
                 ticket: {
                     comment: {
@@ -123,7 +106,7 @@ export class ZendeskController {
             return {
                 status: 'Éxito',
                 message: 'Ticket creado exitosamente',
-                data: { motive, description, product, user, email, phone, location },
+                data: { motive, description, groupId, user, email, phone, location },
                 zendeskTicket: zendeskResponse.ticket,
             };
         } catch (error) {

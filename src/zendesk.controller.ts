@@ -78,17 +78,10 @@ export class ZendeskController {
             const requiredFields = ['motive', 'description', 'product', 'user', 'email', 'phone', 'groupId'];
             console.log("🚀 ~ file: zendesk.controller.ts:79 ~ ZendeskController ~ handleRequest ~ requiredFields:", requiredFields)
 
-            if (!requiredFields.every(field => Object.keys(requestBody).includes(field))) {
-                console.log("🚀 ~ file: zendesk.controller.ts:82 ~ ZendeskController ~ handleRequest ~ requestBody:", requestBody)
-                throw new HttpException('Por favor, proporcione todos los campos requeridos.', HttpStatus.BAD_REQUEST);
-            }
+            
 
             const { motive, description, user, email, phone, groupId } = requestBody;
 
-
-            if (!this.zendeskClient) {
-                throw new HttpException('Error: Cliente Zendesk no inicializado correctamente', HttpStatus.INTERNAL_SERVER_ERROR);
-            }
      
             const zendeskTicket = {
                 ticket: {
